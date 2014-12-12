@@ -29,7 +29,6 @@ int main(int argc, char *argv[]) {
 	struct ip6_hdr *ip6; /* ipv6 header */
 	struct tcphdr *tcp; /*  tcp header */
 	struct udphdr *udp; /* udp header */
-	int *scrp, *desp;   /* tcp/udp source/dest ports */
 
 	
 	/* Check command line arguments */
@@ -98,9 +97,9 @@ int main(int argc, char *argv[]) {
 
 		/* Process the packet and print results */
 		else {
-		    u_char *ptr; /*printing out header info*/
+		    u_char *ptr; /*printing out ethernet header info*/
 		    
-		    /****Process Ethernet data****/
+		    /******************Process Ethernet data*******************************/
 			ethernet = (struct ether_header *) packet_data;
 			ptr = ethernet->ether_dhost;
             int i = ETHER_ADDR_LEN;
@@ -117,13 +116,12 @@ int main(int argc, char *argv[]) {
             }while(--i>0);
             printf("\n");
             
-            /****Process IP data****/
-            u_int length = packet_hdr->len;
-            u_int hlen,off,version;
+            /********************Process IP data***********************************/
+            u_int length = packet_hdr->len; /* length of packet including headers */
+            u_int hlen, version;
+            u_int len;
 
-            int len;
-
-            /* jump pass the ethernet header */
+            /* jump past the ethernet header */
             iphdr = (struct ip*)(packet_data + sizeof(struct ether_header));
             length -= sizeof(struct ether_header); 
 
@@ -134,18 +132,18 @@ int main(int argc, char *argv[]) {
                 break;
             }
 
-            len     = ntohs(iphdr->ip_len);
+            len     = ntohs(iphdr->ip_len); /* Total length (header + payload) */
             hlen    = iphdr->ip_hl * 4; /* header length */
             version = iphdr->ip_v;/* ip version */
 
-            /* check version */
+            /* IPv6 Packet */
             if(version == 6)
             {
-                char *source, *destination;
+                char *source, *destination; /* IP addresses */
 				u_char ipSkipExt; /* Next header variable */
 				struct ip6_ext *ipExt; /* Last extended header */
 				int numOfExt = 0; /* Count headers between IP and TCP/UDP */
-				int size6;
+				int size6 = 0; /* Size of extended headers */
 				
 				ip6 = (struct ip6_hdr*)(packet_data + sizeof(struct ether_header) + hlen);
 				ipSkipExt = ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt;
@@ -159,19 +157,23 @@ int main(int argc, char *argv[]) {
 					  INET6_ADDRSTRLEN);
 				printf("\t[IPv6] %s -> %s\n", source, destination);
 				
-				/* total length (hrd + payload) - payload = ipv6 hdr length */
-				len-=ntohs(ip6->ip6_ctlun.ip6_un1.ip6_un1_plen);
+				
 				ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+				
 				/* Count extended headers */
 				while(1)
 				{
+					/* If tcp/udp, no more extended headers */
 					if(ipSkipExt == IPPROTO_TCP || ipSkipExt == IPPROTO_UDP)
 						break;
+						
 					numOfExt++;
 					size6 = (sizeof(struct ip6_ext) * numOfExt);
 					ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + size6);
 					ipSkipExt = ipExt->ip6e_nxt;
 				}
+				
+			/******************** TCP *************************/
 				if(ipSkipExt == IPPROTO_TCP)
 				{
 					 tcp = (struct tcphdr*)(ipExt);
@@ -179,32 +181,33 @@ int main(int argc, char *argv[]) {
 		                break;
 		            printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
 				}
+			/******************** UDP *************************/
 				else if(ipSkipExt == IPPROTO_UDP)
 				{
 					udp = (struct udphdr*)(ipExt);
 	            	if ( length < sizeof(struct udphdr))
 						break;	
-#ifdef __FAVOR_BSD
+				#ifdef __FAVOR_BSD
 					printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
-#else
+				#else
 					printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
-#endif
+				#endif
 	            }
+            /******************** Other Protocol *************************/
 				else
 				{
 					printf("\t[%x]\n", ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt);
 				}
 				
             }
+            /* IPv4 Packet */
             else
             {
                 /* see if we have as much packet as we should */
                 if(length < len)
                     printf("\ntruncated IP - %d bytes missing\n",len - length);
 
-                /* Check to see if we have the first fragment */
-                //off = ntohs(ip->ip_off);
-                /* print SOURCE DESTINATION hlen version len offset */
+                /* Print Source and Destination */
                 fprintf(stdout,"\t[IPv4] ");
                 fprintf(stdout,"%s ->",
                         inet_ntoa(iphdr->ip_src));
@@ -212,35 +215,33 @@ int main(int argc, char *argv[]) {
                         inet_ntoa(iphdr->ip_dst));
                         
                 length -= hlen;
+                
+               /************** TCP *****************/
                 if(iphdr->ip_p == IPPROTO_TCP)
                 {
 		            tcp = (struct tcphdr*)(packet_data + sizeof(struct ether_header) + hlen);
 		            if(length < sizeof(struct tcphdr))
 		                break;
+		            /* print tcp ports */
 		            printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
 		            
 	            }
+	            /************** UDP *****************/
 	            else if(iphdr->ip_p == IPPROTO_UDP)
 	            {
 	            	udp = (struct udphdr*)(packet_data + sizeof(struct ether_header) + hlen);
 	            	if ( length < sizeof(struct udphdr))
 						break;	
-#ifdef __FAVOR_BSD
+				#ifdef __FAVOR_BSD
 					printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
-#else
+				#else
 					printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
-#endif
+				#endif
 	            }
+	            /************** Other Protocol *****************/
 	            else
 	            	printf("\t[%x]\n", iphdr->ip_p);
             }
-            
-			/* Examples:
-			 * Print the first byte of the packet*/
-			 //printf("%02X", packet_data[0]);
-
-			 /*Print the fifth byte of the packet*/
-			 //printf("%02X", packet_data[4]);
 			 
 		}
 
