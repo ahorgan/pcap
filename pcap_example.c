@@ -251,7 +251,7 @@ int main(int argc, char *argv[]) {
 			 }
 			 /* Not IP Packet */
 			 else
-			 	printf("\t[%d]\n", ethernet->ether_type);
+			 	printf("\t[%d]\n", ntohs(ethernet->ether_type));
 		}
 
 		/* Get the next packet */
