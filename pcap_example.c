@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
 		    
 		    /******************Process Ethernet data*******************************/
 			ethernet = (struct ether_header *) packet_data;
-			ptr = ethernet->ether_dhost;
+			ptr = ethernet->ether_shost;
             int i = ETHER_ADDR_LEN;
             
             do{
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
             }while(--i>0);
             printf(" -> ");
 
-            ptr = ethernet->ether_shost;
+            ptr = ethernet->ether_dhost;
             i = ETHER_ADDR_LEN;
             do{
                 printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":",*ptr++);
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
 				
             }
             /* IPv4 Packet */
-            else
+            else if(version == 4)
             {
                 /* see if we have as much packet as we should */
                 if(length < len)
@@ -209,7 +209,7 @@ int main(int argc, char *argv[]) {
 
                 /* Print Source and Destination */
                 fprintf(stdout,"\t[IPv4] ");
-                fprintf(stdout,"%s ->",
+                fprintf(stdout,"%s -> ",
                         inet_ntoa(iphdr->ip_src));
                 fprintf(stdout,"%s\n",
                         inet_ntoa(iphdr->ip_dst));
@@ -242,6 +242,9 @@ int main(int argc, char *argv[]) {
 	            else
 	            	printf("\t[%x]\n", iphdr->ip_p);
             }
+            /* Not IPv4 or IPv6 */
+            else
+            	printf("[%d]\n", version);
 			 
 		}
 
