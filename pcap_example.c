@@ -116,136 +116,140 @@ int main(int argc, char *argv[]) {
             }while(--i>0);
             printf("\n");
             
-            /********************Process IP data***********************************/
-            u_int length = packet_hdr->len; /* length of packet including headers */
-            u_int hlen, version;
-            u_int len;
-
-            /* jump past the ethernet header */
-            iphdr = (struct ip*)(packet_data + sizeof(struct ether_header));
-            length -= sizeof(struct ether_header); 
-
-            /* check to see we have a packet of valid length */
-            if (length < sizeof(struct ip))
+            if(ethernet->ether_type == 0x0800 || ethernet->ether_type == 0x86DD)
             {
-                printf("truncated ip %d",length);
-                break;
-            }
+		        /********************Process IP data***********************************/
+		        u_int length = packet_hdr->len; /* length of packet including headers */
+		        u_int hlen, version;
+		        u_int len;
 
-            len     = ntohs(iphdr->ip_len); /* Total length (header + payload) */
-            hlen    = iphdr->ip_hl * 4; /* header length */
-            version = iphdr->ip_v;/* ip version */
+		        /* jump past the ethernet header */
+		        iphdr = (struct ip*)(packet_data + sizeof(struct ether_header));
+		        length -= sizeof(struct ether_header); 
 
-            /* IPv6 Packet */
-            if(version == 6)
-            {
-                char *source, *destination; /* IP addresses */
-				u_char ipSkipExt; /* Next header variable */
-				struct ip6_ext *ipExt; /* Last extended header */
-				int numOfExt = 0; /* Count headers between IP and TCP/UDP */
-				int size6 = 0; /* Size of extended headers */
+		        /* check to see we have a packet of valid length */
+		        if (length < sizeof(struct ip))
+		        {
+		            printf("truncated ip %d",length);
+		            break;
+		        }
+
+		        len     = ntohs(iphdr->ip_len); /* Total length (header + payload) */
+		        hlen    = iphdr->ip_hl * 4; /* header length */
+		        version = iphdr->ip_v;/* ip version */
+
+		        /* IPv6 Packet */
+		        if(version == 6)
+		        {
+		            char *source, *destination; /* IP addresses */
+					u_char ipSkipExt; /* Next header variable */
+					struct ip6_ext *ipExt; /* Last extended header */
+					int numOfExt = 0; /* Count headers between IP and TCP/UDP */
+					int size6 = 0; /* Size of extended headers */
 				
-				ip6 = (struct ip6_hdr*)(packet_data + sizeof(struct ether_header) + hlen);
-				ipSkipExt = ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt;
+					ip6 = (struct ip6_hdr*)(packet_data + sizeof(struct ether_header) + hlen);
+					ipSkipExt = ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt;
 				
-				source = (char *)malloc(INET6_ADDRSTRLEN);
-				destination = (char *)malloc(INET6_ADDRSTRLEN);
+					source = (char *)malloc(INET6_ADDRSTRLEN);
+					destination = (char *)malloc(INET6_ADDRSTRLEN);
 				
-				inet_ntop(AF_INET6, &ip6->ip6_src, source,
-					  INET6_ADDRSTRLEN);
-				inet_ntop(AF_INET6, &ip6->ip6_dst, destination,
-					  INET6_ADDRSTRLEN);
-				printf("\t[IPv6] %s -> %s\n", source, destination);
+					inet_ntop(AF_INET6, &ip6->ip6_src, source,
+						  INET6_ADDRSTRLEN);
+					inet_ntop(AF_INET6, &ip6->ip6_dst, destination,
+						  INET6_ADDRSTRLEN);
+					printf("\t[IPv6] %s -> %s\n", source, destination);
 				
 				
-				ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+					ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
 				
-				/* Count extended headers */
-				while(1)
-				{
-					/* If tcp/udp, no more extended headers */
-					if(ipSkipExt == IPPROTO_TCP || ipSkipExt == IPPROTO_UDP)
-						break;
+					/* Count extended headers */
+					while(1)
+					{
+						/* If tcp/udp, no more extended headers */
+						if(ipSkipExt == IPPROTO_TCP || ipSkipExt == IPPROTO_UDP)
+							break;
 						
-					numOfExt++;
-					size6 = (sizeof(struct ip6_ext) * numOfExt);
-					ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + size6);
-					ipSkipExt = ipExt->ip6e_nxt;
-				}
+						numOfExt++;
+						size6 = (sizeof(struct ip6_ext) * numOfExt);
+						ipExt = (struct ip6_ext*)(packet_data + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + size6);
+						ipSkipExt = ipExt->ip6e_nxt;
+					}
 				
-			/******************** TCP *************************/
-				if(ipSkipExt == IPPROTO_TCP)
-				{
-					 tcp = (struct tcphdr*)(ipExt);
-		            if(length < sizeof(struct tcphdr))
-		                break;
-		            printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
-				}
-			/******************** UDP *************************/
-				else if(ipSkipExt == IPPROTO_UDP)
-				{
-					udp = (struct udphdr*)(ipExt);
-	            	if ( length < sizeof(struct udphdr))
-						break;	
-				#ifdef __FAVOR_BSD
-					printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
-				#else
-					printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
-				#endif
-	            }
-            /******************** Other Protocol *************************/
-				else
-				{
-					printf("\t[%x]\n", ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt);
-				}
+				/******************** TCP *************************/
+					if(ipSkipExt == IPPROTO_TCP)
+					{
+						 tcp = (struct tcphdr*)(ipExt);
+				        if(length < sizeof(struct tcphdr))
+				            break;
+				        printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
+					}
+				/******************** UDP *************************/
+					else if(ipSkipExt == IPPROTO_UDP)
+					{
+						udp = (struct udphdr*)(ipExt);
+			        	if ( length < sizeof(struct udphdr))
+							break;	
+					#ifdef __FAVOR_BSD
+						printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
+					#else
+						printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
+					#endif
+			        }
+		        /******************** Other Protocol *************************/
+					else
+					{
+						printf("\t[%x]\n", ip6->ip6_ctlun.ip6_un1.ip6_un1_nxt);
+					}
 				
-            }
-            /* IPv4 Packet */
-            else if(version == 4)
-            {
-                /* see if we have as much packet as we should */
-                if(length < len)
-                    printf("\ntruncated IP - %d bytes missing\n",len - length);
+		        }
+		        /* IPv4 Packet */
+		        else if(version == 4)
+		        {
+		            /* see if we have as much packet as we should */
+		            if(length < len)
+		                printf("\ntruncated IP - %d bytes missing\n",len - length);
 
-                /* Print Source and Destination */
-                fprintf(stdout,"\t[IPv4] ");
-                fprintf(stdout,"%s -> ",
-                        inet_ntoa(iphdr->ip_src));
-                fprintf(stdout,"%s\n",
-                        inet_ntoa(iphdr->ip_dst));
-                        
-                length -= hlen;
-                
-               /************** TCP *****************/
-                if(iphdr->ip_p == IPPROTO_TCP)
-                {
-		            tcp = (struct tcphdr*)(packet_data + sizeof(struct ether_header) + hlen);
-		            if(length < sizeof(struct tcphdr))
-		                break;
-		            /* print tcp ports */
-		            printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
+		            /* Print Source and Destination */
+		            fprintf(stdout,"\t[IPv4] ");
+		            fprintf(stdout,"%s -> ",
+		                    inet_ntoa(iphdr->ip_src));
+		            fprintf(stdout,"%s\n",
+		                    inet_ntoa(iphdr->ip_dst));
+		                    
+		            length -= hlen;
 		            
-	            }
-	            /************** UDP *****************/
-	            else if(iphdr->ip_p == IPPROTO_UDP)
-	            {
-	            	udp = (struct udphdr*)(packet_data + sizeof(struct ether_header) + hlen);
-	            	if ( length < sizeof(struct udphdr))
-						break;	
-				#ifdef __FAVOR_BSD
-					printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
-				#else
-					printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
-				#endif
-	            }
-	            /************** Other Protocol *****************/
-	            else
-	            	printf("\t[%x]\n", iphdr->ip_p);
-            }
-            /* Not IPv4 or IPv6 */
-            else
-            	printf("[%d]\n", version);
-			 
+		           /************** TCP *****************/
+		            if(iphdr->ip_p == IPPROTO_TCP)
+		            {
+				        tcp = (struct tcphdr*)(packet_data + sizeof(struct ether_header) + hlen);
+				        if(length < sizeof(struct tcphdr))
+				            break;
+				        /* print tcp ports */
+				        printf("\t[TCP] %d -> %d\n", ntohs(tcp->th_sport), ntohs(tcp->th_dport));
+				        
+			        }
+			        /************** UDP *****************/
+			        else if(iphdr->ip_p == IPPROTO_UDP)
+			        {
+			        	udp = (struct udphdr*)(packet_data + sizeof(struct ether_header) + hlen);
+			        	if ( length < sizeof(struct udphdr))
+							break;	
+					#ifdef __FAVOR_BSD
+						printf("\t[UDP] %d -> %d\n", ntohs(udp->uh_sport), ntohs(udp->uh_dport));
+					#else
+						printf("\t[UDP] %d -> %d\n", ntohs(udp->source), ntohs(udp->dest));
+					#endif
+			        }
+			        /************** Other Protocol *****************/
+			        else
+			        	printf("\t[%x]\n", iphdr->ip_p);
+		        }
+		        /* Not IPv4 or IPv6 */
+		        else
+		        	printf("\t[%d]\n", version);
+			 }
+			 else
+			 	printf("\t[%d]\n", ethernet->ether_type);
 		}
 
 		/* Get the next packet */
