@@ -105,18 +105,19 @@ int main(int argc, char *argv[]) {
             int i = ETHER_ADDR_LEN;
             
             do{
-                printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":",*ptr++);
+                printf("%s%x",(i == ETHER_ADDR_LEN) ? "" : ":",*ptr++);
             }while(--i>0);
             printf(" -> ");
 
             ptr = ethernet->ether_dhost;
             i = ETHER_ADDR_LEN;
             do{
-                printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":",*ptr++);
+                printf("%s%x",(i == ETHER_ADDR_LEN) ? "" : ":",*ptr++);
             }while(--i>0);
             printf("\n");
             
-            if(ethernet->ether_type == 0x0800 || ethernet->ether_type == 0x86DD)
+            /* If IP packet */
+            if(ntohs(ethernet->ether_type) == 0x0800 || ntohs(ethernet->ether_type) == 0x86DD)
             {
 		        /********************Process IP data***********************************/
 		        u_int length = packet_hdr->len; /* length of packet including headers */
@@ -248,6 +249,7 @@ int main(int argc, char *argv[]) {
 		        else
 		        	printf("\t[%d]\n", version);
 			 }
+			 /* Not IP Packet */
 			 else
 			 	printf("\t[%d]\n", ethernet->ether_type);
 		}
